@@ -49,7 +49,7 @@ jobs:
       - name: Write article with Claude Code
         if: steps.pick.outputs.case_id != ''
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CASE_ID: ${{ steps.pick.outputs.case_id }}
         run: |
           claude -p "CLAUDE.md と .claude/skills/write-article/SKILL.md を読み、その手順に従って、
@@ -63,7 +63,7 @@ jobs:
       - name: Validate (fix once if needed)
         if: steps.pick.outputs.case_id != ''
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CASE_ID: ${{ steps.pick.outputs.case_id }}
         run: |
           if python scripts/validate_article.py "$CASE_ID" > validation.txt; then
