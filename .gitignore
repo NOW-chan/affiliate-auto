@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+claude_result.json
+validation.txt
+targets.txt
+.venv/

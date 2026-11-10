@@ -1,0 +1,29 @@
+# Threads の長期トークン（60日で失効）を月1回更新して、Secrets を上書きする
+name: refresh-threads-token
+
+on:
+  schedule:
+    - cron: "0 1 1 * *"   # 毎月1日 日本時間10:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Refresh and save
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}   # このリポジトリの Secrets に書き込める fine-grained PAT
+        run: |
+          NEW_TOKEN="$(python scripts/refresh_threads_token.py)"
+          echo "::add-mask::$NEW_TOKEN"
+          gh secret set THREADS_ACCESS_TOKEN --body "$NEW_TOKEN" --repo "$GITHUB_REPOSITORY"
+          echo "THREADS_ACCESS_TOKEN を更新しました"

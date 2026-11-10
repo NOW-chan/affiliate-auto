@@ -1,0 +1,19 @@
+# 案件リスト（週1回、手で追記する）
+#
+# status の流れ（スクリプトが自動で書き換える）:
+#   todo → hatena_draft → published → sns_posted
+#   （検証に失敗したら todo のまま。Actions の失敗通知で気づける）
+#
+# 追記するときは status: todo にする。上にあるものから順に記事化される。
+
+cases:
+  - id: sample-service            # 半角英数とハイフン（記事フォルダ名になる）
+    name: サンプルサービス
+    link: https://px.a8.net/svt/ejp?a8mat=XXXXXXXX   # A8.netで発行したリンクをそのまま
+    official_url: https://example.com/
+    genre: 副業・クラウドサービス
+    angle: 比較・解説型（初心者向け）
+    target: 本業が忙しく、副業の時間を作れずに悩んでいる会社員
+    competitors:
+      - https://example.org/
+    status: todo

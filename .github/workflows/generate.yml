@@ -1,0 +1,109 @@
+# 毎朝、todo の案件を1件記事化し、検証してから、はてなに「下書き」で投稿する
+name: generate-article
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # UTC 22:00 = 日本時間 毎朝7:00
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "はてなに投稿せず、生成と検証だけ行う"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # cases.yaml と articles/ をコミットして戻すため
+
+concurrency:
+  group: affiliate-pipeline   # sns.yml と同時に cases.yaml を書き換えないように
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          pip install -r requirements.txt
+
+      - name: Pick next case
+        id: pick
+        run: echo "case_id=$(python scripts/cases.py next)" >> "$GITHUB_OUTPUT"
+
+      - name: No case
+        if: steps.pick.outputs.case_id == ''
+        run: echo "status が todo の案件がありません。cases.yaml に追記してください。"
+
+      - name: Write article with Claude Code
+        if: steps.pick.outputs.case_id != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CASE_ID: ${{ steps.pick.outputs.case_id }}
+        run: |
+          claude -p "CLAUDE.md と .claude/skills/write-article/SKILL.md を読み、その手順に従って、
+          cases.yaml の id: ${CASE_ID} の記事を articles/${CASE_ID}/ に作成してください。
+          cases.yaml と scripts/ は編集しないでください。" \
+            --allowedTools "Read,Write,Edit,Glob,Grep,WebSearch,WebFetch" \
+            --max-turns 40 \
+            --output-format json > claude_result.json
+          jq -r '.result // empty' claude_result.json | tail -n 20
+
+      - name: Validate (fix once if needed)
+        if: steps.pick.outputs.case_id != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CASE_ID: ${{ steps.pick.outputs.case_id }}
+        run: |
+          if python scripts/validate_article.py "$CASE_ID" > validation.txt; then
+            cat validation.txt; exit 0
+          fi
+          cat validation.txt
+          echo "::warning::検証エラーがあったため、Claude Code に1回だけ修正させます"
+          claude -p "articles/${CASE_ID}/ の記事が検証に落ちました。CLAUDE.md のルールに従って、
+          次のエラーをすべて直してください。cases.yaml と scripts/ は編集しないでください。
+          $(cat validation.txt)" \
+            --allowedTools "Read,Write,Edit,Glob,Grep" \
+            --max-turns 20 > /dev/null
+          python scripts/validate_article.py "$CASE_ID"
+
+      - name: Post draft to Hatena Blog
+        if: steps.pick.outputs.case_id != ''
+        env:
+          HATENA_ID: ${{ secrets.HATENA_ID }}
+          HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
+          HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
+          CASE_ID: ${{ steps.pick.outputs.case_id }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/post_hatena.py "$CASE_ID" --dry-run
+          else
+            python scripts/post_hatena.py "$CASE_ID"
+          fi
+
+      - name: Upload article (for review)
+        if: steps.pick.outputs.case_id != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-${{ steps.pick.outputs.case_id }}
+          path: articles/${{ steps.pick.outputs.case_id }}/
+
+      - name: Commit state
+        if: steps.pick.outputs.case_id != '' && inputs.dry_run != true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add articles cases.yaml
+          git commit -m "draft: ${{ steps.pick.outputs.case_id }}" || exit 0
+          git pull --rebase --autostash && git push
