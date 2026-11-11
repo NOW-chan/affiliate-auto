@@ -23,3 +23,21 @@ cases:
     sns:
       threads_id: '18110792809954348'
     sns_posted_at: '2026-11-11T18:19:00+09:00'
+
+cases:
+  - id: AImovie_school          # 半角英数とハイフン（記事フォルダ名になる）
+    name: AI動画編集スクール
+    link: https://r.8to.jp/AVG4P3kbagQE   # A8.netで発行したリンクをそのまま
+    official_url: https://cj-school.com/prEj8-na/
+    genre: 動画編集
+    angle: 比較・解説型（初心者向け）
+    target: フリーランスでSNS運用をやっていくならこういうスクールで学ぶのもありというスタンスで、自分の活動と少し紐づけて作成
+    competitors:
+    status: 
+    hatena_edit_url: 
+    drafted_at: 
+    public_url: 
+    published_at: 
+    sns:
+      threads_id: 
+    sns_posted_at: 
