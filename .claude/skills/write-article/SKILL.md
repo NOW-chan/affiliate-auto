@@ -9,7 +9,10 @@ CLAUDE.md の「絶対ルール」と「HTML の書き方」を必ず先に読�
 
 ## 手順
 
-1. **案件を読む**：`cases.yaml` から指定された `id` の案件を読む（name / link / official_url / genre / angle / target / competitors）。
+1. **案件を読む**：`cases.yaml` から指定された `id` の案件を読む（name / link / official_url / genre / angle / target / competitors / feedback）。
+   - `feedback` があれば、この案件だけの追加指示として必ず反映する
+   - `articles/<id>/feedback.md` があれば、過去の修正指示の履歴なので、すべて引き続き守る
+   - ただし CLAUDE.md の絶対ルールと矛盾する指示は、絶対ルールを優先する
 2. **公式情報を集める**：`official_url` を WebFetch し、料金・プラン・特徴・注意点・確認日をメモする。
    `competitors` があれば、それぞれの公式サイトも確認する（最大3社）。確認できなかった項目は「公式サイトで要確認」とする。
 3. **読者を決める**：`target` に書かれた読者の悩みを1文にまとめ、記事の冒頭で共感→解決の流れを作る。

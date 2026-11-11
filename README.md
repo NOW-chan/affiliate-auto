@@ -13,7 +13,7 @@ A8.net の案件 → はてなブログ記事（下書き）→ 人が公開 →
 | 起動 | cron スケジュール（記事生成：毎朝7時／SNS：1日4回／トークン更新：月1回） |
 | 状態管理 | `cases.yaml`（Git にコミットして保存。DB不要） |
 | 秘密情報 | GitHub Secrets |
-| AI | Claude Code（`claude -p` の無人実行、Anthropic API キーで課金） |
+| AI | Claude Code（`claude -p` の無人実行。Claude の有料プランのトークンで認証） |
 | 言語 | Python 3.12 / Node.js 22 |
 
 > リポジトリは **Private** を推奨（案件リストや戦略が丸見えになるため）。
@@ -62,10 +62,15 @@ gh repo create affiliate-auto --private --source=. --push
    - ルートエンドポイント `https://blog.hatena.ne.jp/<はてなID>/<ブログドメイン>/atom` の
      `<ブログドメイン>` 部分（例：`nowchan.hatenablog.com`）を `HATENA_BLOG_DOMAIN` に使う
 
-### 3. Anthropic API キー
+### 3. Claude Code の認証トークン
 
-[Claude Console](https://console.anthropic.com/) で API キーを発行する。
-**使いすぎ防止のため、Console で月の利用上限（Spend limit）を設定しておく**のがおすすめ。
+自分のPCで `claude setup-token` を実行し、表示された `sk-ant-oat01-...` を
+Secret `CLAUDE_CODE_OAUTH_TOKEN` に登録する（有効期限1年。Pro 以上のプランが必要）。
+プランの利用枠を使うので追加料金はかからないが、チャットと同じ枠を消費する。
+
+> API キー（従量課金）に切り替える場合は、ワークフローの
+> `CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` を
+> `ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}` に置き換える（両方は登録しない）。
 
 ### 4. Threads API のトークン
 
@@ -94,7 +99,7 @@ Settings → Secrets and variables → Actions
 
 | 種類 | 名前 | 必須 |
 |---|---|---|
-| Secret | `ANTHROPIC_API_KEY` | ✅ |
+| Secret | `CLAUDE_CODE_OAUTH_TOKEN` | ✅ |
 | Secret | `HATENA_ID` | ✅ |
 | Secret | `HATENA_BLOG_DOMAIN` | ✅ |
 | Secret | `HATENA_API_KEY` | ✅ |
@@ -107,7 +112,7 @@ Settings → Secrets and variables → Actions
 gh CLI でまとめて登録する例：
 
 ```bash
-gh secret set ANTHROPIC_API_KEY
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
 gh secret set HATENA_ID --body "nowchan"
 gh secret set HATENA_BLOG_DOMAIN --body "nowchan.hatenablog.com"
 gh secret set HATENA_API_KEY
@@ -137,6 +142,30 @@ gh secret set GH_PAT
 1. 冒頭に【PR】表記がある
 2. 「使ってみた」のような、実際には体験していない記述がない
 3. 料金や数字が公式サイトと合っている
+
+---
+
+## 出来栄えに納得がいかず、作り直したいとき
+
+直したい範囲によって、書く場所が違います。
+
+| 直したい範囲 | 書く場所 | 例 |
+|---|---|---|
+| **この記事だけ、今すぐ作り直したい** | Actions → **regenerate-article** → Run workflow の「修正指示」欄 | 「導入を3行に。比較表に解約方法の列を追加」 |
+| **この案件では毎回こうしてほしい** | `cases.yaml` のその案件の `feedback:` | 「初心者向けに専門用語を使わない」 |
+| **全部の記事でこうしてほしい** | `.claude/skills/write-article/SKILL.md`（書き方）か `CLAUDE.md`（絶対ルール・デザイン） | 「CTAボタンは緑」「1記事5,000字前後」 |
+
+**regenerate-article の動き**
+
+1. 案件ID（`cases.yaml` の `id`）と修正指示を入力して実行する
+2. 既存の記事があればそれを土台に、なければ新しく作り直す
+3. 修正指示は `articles/<id>/feedback.md` に履歴として残り、次に作り直すときも引き継がれる
+4. 何を直したかは、実行結果ページの Summary に表示される
+5. `dry_run` のチェックを外すと、はてなの**下書きを上書き**する（新しい下書きは増えない）
+6. 公開済みの記事は自動では上書きしない（はてなで直接直す）
+
+**修正指示のコツ**：「もっと良くして」ではなく、「どこを・どう」を具体的に書く。
+例：「冒頭の悩みを、残業が多い会社員の視点に変える」「比較表の1列目を料金にする」「見出しを5個以内にする」
 
 ---
 
@@ -174,7 +203,7 @@ scripts/post_hatena.py          はてなに下書き投稿（AtomPub）
 scripts/check_published.py      公開されたかを確認
 scripts/post_sns.py             Threads / X に投稿（二重投稿防止つき）
 scripts/refresh_threads_token.py Threads トークン更新
-.github/workflows/              generate.yml / sns.yml / refresh-threads-token.yml
+.github/workflows/              generate.yml / regenerate.yml / sns.yml / refresh-threads-token.yml
 ```
 
 ## status の意味

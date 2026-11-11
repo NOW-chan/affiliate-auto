@@ -1,0 +1,123 @@
+# 修正指示を書いて、記事を作り直す（手動実行専用）
+# Actions → regenerate-article → Run workflow で、案件IDと修正指示を入力する
+name: regenerate-article
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "作り直す案件の id（cases.yaml の id）"
+        type: string
+        required: true
+      instructions:
+        description: "修正指示（例：導入をもっと短く。比較表に月額と解約方法の列を追加。CTAボタンを緑に）"
+        type: string
+        required: true
+      dry_run:
+        description: "はてなに反映せず、作り直しと検証だけ行う（記事はリポジトリに保存される）"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: affiliate-pipeline
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      INSTRUCTIONS: ${{ inputs.instructions }}   # 入力値は環境変数で渡す（シェルに直接埋め込まない）
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          pip install -r requirements.txt
+
+      - name: Check case
+        run: python scripts/cases.py show "$CASE_ID"
+
+      - name: Save instructions to history
+        run: |
+          mkdir -p "articles/$CASE_ID"
+          {
+            echo ""
+            echo "## $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M')"
+            echo "$INSTRUCTIONS"
+          } >> "articles/$CASE_ID/feedback.md"
+
+      - name: Rewrite article with Claude Code
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          claude -p "CLAUDE.md と .claude/skills/write-article/SKILL.md を読んでください。
+          cases.yaml の id: ${CASE_ID} の記事を、下の『今回の修正指示』に従って作り直してください。
+          - articles/${CASE_ID}/article.html があれば、それを土台に修正する。なければ新しく作る。
+          - articles/${CASE_ID}/feedback.md に過去の修正指示があれば、それも引き続き守る。
+          - CLAUDE.md の絶対ルールは、修正指示より優先する（指示がルールと矛盾したらルールを守る）。
+          - 必要なら meta.yaml も更新する。cases.yaml と scripts/ は編集しない。
+          - 最後に、何をどう直したかを3〜5行で報告する。
+
+          今回の修正指示:
+          ${INSTRUCTIONS}" \
+            --allowedTools "Read,Write,Edit,Glob,Grep,WebSearch,WebFetch" \
+            --max-turns 40 \
+            --output-format json > claude_result.json
+          echo "### 修正内容" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.result // empty' claude_result.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate (fix once if needed)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if python scripts/validate_article.py "$CASE_ID" > validation.txt; then
+            cat validation.txt; exit 0
+          fi
+          cat validation.txt
+          echo "::warning::検証エラーがあったため、Claude Code に1回だけ修正させます"
+          claude -p "articles/${CASE_ID}/ の記事が検証に落ちました。CLAUDE.md のルールに従って、
+          次のエラーをすべて直してください。cases.yaml と scripts/ は編集しないでください。
+          $(cat validation.txt)" \
+            --allowedTools "Read,Write,Edit,Glob,Grep" \
+            --max-turns 20 > /dev/null
+          python scripts/validate_article.py "$CASE_ID"
+
+      - name: Update Hatena draft
+        env:
+          HATENA_ID: ${{ secrets.HATENA_ID }}
+          HATENA_BLOG_DOMAIN: ${{ secrets.HATENA_BLOG_DOMAIN }}
+          HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/post_hatena.py "$CASE_ID" --dry-run
+          else
+            python scripts/post_hatena.py "$CASE_ID"
+          fi
+
+      - name: Upload article (for review)
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-${{ inputs.case_id }}
+          path: articles/${{ inputs.case_id }}/
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add articles cases.yaml
+          git commit -m "regenerate: ${CASE_ID}" || exit 0
+          git pull --rebase --autostash && git push
