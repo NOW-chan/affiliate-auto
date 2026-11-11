@@ -15,4 +15,6 @@ cases:
     angle: 比較・解説型（初心者向け）
     target: 光回線の開通をしたい、または回線変更を検討している方向け
     competitors:
-    status: todo
+    status: hatena_draft
+    hatena_edit_url: https://blog.hatena.ne.jp/NOWchan/nowchan.hatenablog.com/atom/entry/14729835035336905808
+    drafted_at: '2026-11-11T18:08:25+09:00'
