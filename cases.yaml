@@ -7,13 +7,12 @@
 # 追記するときは status: todo にする。上にあるものから順に記事化される。
 
 cases:
-  - id: sample-service            # 半角英数とハイフン（記事フォルダ名になる）
-    name: サンプルサービス
-    link: https://px.a8.net/svt/ejp?a8mat=XXXXXXXX   # A8.netで発行したリンクをそのまま
-    official_url: https://example.com/
-    genre: 副業・クラウドサービス
+  - id: Flet's_hikari          # 半角英数とハイフン（記事フォルダ名になる）
+    name: フレッツ光
+    link: https://r.8to.jp/JYXjLCszGufT   # A8.netで発行したリンクをそのまま
+    official_url: https://denwa-hikari.com/flets?acc=a8&utm_source=a8&utm_medium=affiliate&utm_campaign=banner_ad
+    genre: 光回線開通
     angle: 比較・解説型（初心者向け）
-    target: 本業が忙しく、副業の時間を作れずに悩んでいる会社員
+    target: 光回線の開通をしたい、または回線変更を検討している方向け
     competitors:
-      - https://example.org/
     status: todo
